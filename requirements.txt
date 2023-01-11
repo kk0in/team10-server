@@ -28,4 +28,3 @@ ruamel.yaml==0.17.21
 sqlparse==0.4.3
 uritemplate==4.1.1
 urllib3==1.26.13
-django-cors-headers==3.13.0

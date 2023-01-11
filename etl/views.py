@@ -1,150 +1,138 @@
-from authentication.serializers import UserDetailSerializer
 from .serializers import *
-from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import generics, permissions
 from .models import *
+from authentication.serializers import UserDetailSerializer
 from .permissions import *
 from .paginations import *
+from django.shortcuts import render, get_object_or_404, redirect
+from django.utils import timezone
+from django.http import HttpResponseNotAllowed, HttpResponse
+from .models import *
+from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.views.generic import ListView, DetailView
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
-import etl.swaggers as swaggers
 
 
-class ClassListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAdmin | (IsAuthenticated & IsProfessorOrReadOnly)]
+class AnnouncementListView(generics.ListAPIView):
+    pagination_class = PostListPagination
+    # permission_classes = [IsQualified]
+    queryset = Post.objects.filter(is_announcement=True)
+    serializer_class = PostSerializer
+
+    def list(self, request):
+        return Response(self.get_serializer(self.get_queryset(), many=True).data)
+
+
+class AnnouncementDetailView(generics.RetrieveAPIView):
+    # permission_classes = [IsQualified]
+    # queryset = Post.objects.filter(is_announcement=True)
+    serializer_class = PostDetailSerializer
+
+
+class AnnouncementCreateView(generics.CreateAPIView):
+    # permission_classes = [IsProfessorOrReadOnly]
+    serializer_class = PostDetailSerializer
+
+
+class AnnouncementUpdateView(generics.UpdateAPIView):
+    # permission_classes = [IsProfessorOrReadOnly]
+    serializer_class = PostSerializer
+
+
+class AnnouncementDeleteView(generics.DestroyAPIView):
+    # permission_classes = [IsProfessorOrReadOnly]
+    serializer_class = PostSerializer
+
+
+class QuestionListView(generics.ListAPIView):
+    pagination_class = PostListPagination
+    # permission_classes = [IsQualified]
+    queryset = Post.objects.filter(is_announcement=False)
+    serializer_class = PostSerializer
+
+    def list(self, request, *args, **kwargs):
+        return Response(self.get_serializer(self.get_queryset(), many=True).data)
+
+
+class QuestionDetailView(generics.RetrieveAPIView):
+    # permission_classes = [IsQualified]
+    queryset = Post.objects.all()
+    serializer_class = PostDetailSerializer
+    # lookup_field = ['title', 'created_by', 'created_at', 'content']
+
+
+class QuestionCreateView(generics.CreateAPIView):
+    # permission_classes = [IsQualified, DoesUserMatchRequest]
+
+    serializer_class = PostCreateSerializer
+
+
+class QuestionUpdateView(generics.UpdateAPIView):
+    # permission_classes = [IsQualified, DoesUserMatchRequest]
+    queryset = Post.objects.all()
+    serializer_class = PostDetailSerializer
+
+
+class QuestionDeleteView(generics.DestroyAPIView):
+    # permission_classes = [IsQualified, DoesUserMatchRequest]
+    queryset = Post.objects.all()
+    serializer_class = PostDetailSerializer
+
+    def delete(self, request, *args, **kwargs):
+        return Response(self.get_serializer(self.get_queryset()).data)
+
+
+class CommentCreateView(generics.CreateAPIView):
+    # permission_classes = [IsQualified, DoesUserMatchRequest]
+    serializer_class = CommentSerializer
+
+
+class ClassListView(generics.ListAPIView):
+    permission_classes = [IsQualified]
     queryset = Class.objects.all()
     serializer_class = ClassSerializer
 
 
-class ProfessorClassListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAdmin | (IsAuthenticated & IsQualified & IsProfessor)]
+class ClassCreateView(generics.CreateAPIView):
+    permission_classes = [IsProfessorOrReadOnly]
     serializer_class = ClassSerializer
 
-    def get_queryset(self):
-        return Class.objects.filter(created_by=self.request.user)
 
+# 수강신청에 사용하는 클래스. 수강신청 후 다시 유저정보를 불러와야 하므로 GET 요청으로 처리함.
+class EnrollClassView(generics.RetrieveAPIView):
+    # permission_classes = [DoesUserMatchRequest]
+    serializer_class = UserDetailSerializer
+    queryset = User.objects.all()
 
-class ClassDeleteView(generics.DestroyAPIView):
-    permission_classes = [IsAdmin | IsCreatorReadOnly]
-    queryset = Class.objects.all()
-
-
-class EnrollClassView(generics.CreateAPIView):
-    permission_classes = [IsAdmin]
-    serializer_class = EnrollDropSerializer
-
-    @swagger_auto_schema(
-        request_body=swaggers.enroll_request_body,
-        responses=swaggers.enroll_responses,
-    )
-    def post(self, request, *args, **kwargs):
-        class_id = int(request.data['class_id'])
+    def get(self, *args, **kwargs):
+        # url 형식을 'etl/<int:pk>/enroll/?class_id={클래스 아이디}' 형식으로, class_id를 패러미터로 받기 때문에 이를 parsing
+        class_id = int(self.request.GET['class_id'])
         lecture = Class.objects.get(id=class_id)
-        for l in lecture.assignment_set.all():
-            l.student.add(request.user)
-        request.user.classes.add(lecture)
-        serializer = EnrollDropSerializer(request.user)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        # 아래 코드가 이해되지 않는다면 models.py의 Class model 참조 바람.
+        self.request.user.classes.add(lecture)
+        return super().get(self, *args, **kwargs)
 
 
-class DropClassView(generics.CreateAPIView):
-    permission_classes = [IsAdmin]
-    serializer_class = EnrollDropSerializer
+# 수업 드랍에 사용하는 클래스. 드랍 후 다시 유저정보를 불러와야 하므로 GET 요청으로 처리함.
+class DropClassView(generics.RetrieveAPIView):
+    # permission_classes = [DoesUserMatchRequest]
+    serializer_class = UserDetailSerializer
+    queryset = User.objects.all()
 
-    @swagger_auto_schema(
-        request_body=swaggers.drop_request_body,
-        responses=swaggers.drop_responses,
-    )
-    def post(self, request, *args, **kwargs):
-        class_id = int(request.data['class_id'])
+    # 코드에 대한 설명은 EnrollClassView 와 유사하므로 이를 참조하기 바람.
+    def get(self, *args, **kwargs):
+        class_id = int(self.request.GET['class_id'])
         lecture = Class.objects.get(id=class_id)
-        for l in lecture.assignment_set.all():
-            l.student.remove(request.user)
-        request.user.classes.remove(lecture)
-        serializer = EnrollDropSerializer(request.user)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        self.request.user.classes.remove(lecture)
+        return super().get(self, *args, **kwargs)
 
 
 class StudentListView(generics.ListAPIView):
     pagination_class = StudentListPagination
     serializer_class = UserSimpleSerializer
-    permission_classes = [IsAdmin | (IsAuthenticated & IsQualified)]
+    permission_classes = [IsAdmin]
 
     def get_queryset(self):
         return User.objects.filter(classes=self.kwargs['pk'])
-
-
-# GET assignments/
-# 모든 assignments list 반환
-class AssignmentListCreateView(generics.ListCreateAPIView):
-    queryset = Assignment.objects.all()
-    serializer_class = AssignmentCreateSerializer
-    permission_classes = [IsProfessorOrReadOnly | IsAdmin]
-
-
-# GET, PUT, PATCH, DELETE assignments/<int:pk>/
-# pk번째 assignments detail 반환, 수정, 삭제
-class AssignmentClassView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Assignment.objects.all()
-    serializer_class = AssignmentDetailSerializer
-    permission_list = {
-        'PATCH': [IsCreatorReadOnly | IsAdmin],
-        'PUT': [IsCreatorReadOnly | IsAdmin],
-        'DELETE': [IsCreatorReadOnly | IsAdmin],
-        'GET': [IsQualified]
-    }
-
-    def get_permissions(self):
-        if self.request.method in self.permission_list:
-            permission_classes = self.permission_list.get(self.request.method)
-            return [permission() for permission in permission_classes]
-        return super().get_permissions()
-
-
-# GET assignments/class/<int:pk>/
-# pk번째 class의 모든 assignment list 반환
-class AssignmentListByLectureView(generics.ListAPIView):
-    serializer_class = AssignmentCreateSerializer
-    permission_classes = [IsQualified]
-
-    def get_queryset(self):
-        return Assignment.objects.all().filter(lecture=self.kwargs['pk'])
-
-
-# GET assignments/student/
-# 학생이 자신의 모든 assignment list 반환
-class AssignmentListByStudentView(generics.ListAPIView):
-    serializer_class = AssignmentCreateSerializer
-    permission_classes = [IsQualified]
-
-    def get_queryset(self):
-        return Assignment.objects.all().filter(student=self.request.user)
-
-
-# GET assignments/grade/<int:pk>/
-# 학생이 pk번째 assignment 점수, 제출여부, 채점여부 확인
-class AssignmentGradeGetView(generics.RetrieveAPIView):
-    serializer_class = AssignmentToStudentSerializer
-    permission_classes = [IsQualified]
-
-    def get(self, request, *args, **kwargs):
-        obj = AssignmentToStudent.objects.get(assignment=self.kwargs['pk'], student=self.request.user)
-        serializer = AssignmentToStudentSerializer(obj)
-        return Response(serializer.data)
-
-
-# PUT(PATCH) assignments/grading/<int:pk>/
-# 교수자가 pk번째 assignments 채점. 학번, 점수 입력
-class AssignmentGradingView(generics.UpdateAPIView):
-    queryset = Assignment.objects.all()
-    serializer_class=AssignmentGradingSerializer
-    permission_classes = [IsCreatorReadOnly | IsAdmin]
-
-
-# 디버깅용 모든 유저의 정보를 보는 View
-# class UserListView(generics.ListAPIView):
-#     permission_classes = [IsAdmin]
-#     queryset = User.objects.all()
-#     serializer_class = UserDetailSerializer

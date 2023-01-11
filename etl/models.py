@@ -18,7 +18,6 @@ class Assignment(models.Model):
     due_date = models.DateTimeField()
     max_grade = models.FloatField(null=True, blank=True)
     weight = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],)
-    student = models.ManyToManyField(User, related_name='assignments', through="AssignmentToStudent")
 
 
 class Post(models.Model):
@@ -37,11 +36,3 @@ class Comment(models.Model):
     content = models.TextField()
     created_at = models.DateTimeField()
     modified_at = models.DateTimeField(null=True, blank=True)
-
-
-class AssignmentToStudent(models.Model):
-    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE)
-    student = models.ForeignKey(User, on_delete=models.CASCADE)
-    is_submitted = models.BooleanField(default=False)
-    is_graded = models.BooleanField(default=False)
-    score = models.FloatField(default=0)

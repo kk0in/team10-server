@@ -1,6 +1,8 @@
 from rest_framework import serializers
+
 from etl.serializers import ClassSerializer
 from .models import User
+from rest_framework.authtoken.models import Token
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 
@@ -12,10 +14,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
-        try:
-            rep['token'] = instance.auth_token.key
-        except:
-            rep['token'] = 'no token. please contact developers'
+        rep['token'] = instance.auth_token.key
         return rep
 
     class Meta:
@@ -24,20 +23,19 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    is_professor = serializers.BooleanField(required=True)
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'password', 'username', 'student_id']
 
     def create(self, validated_data):
         user = User.objects.create_user(validated_data['email'], validated_data['password'])
         user.username = validated_data['username']
         user.student_id = validated_data['student_id']
-        user.is_professor = validated_data['is_professor']
         user.save()
+        Token.objects.create(user=user)
         return user
-
-    class Meta:
-        model = User
-        fields = ['id', 'email', 'password', 'username', 'student_id', 'is_professor']
 
 
 class UserIDSerializer(serializers.ModelSerializer):
