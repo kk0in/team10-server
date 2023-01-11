@@ -25,14 +25,14 @@ class Post(models.Model):
     title = models.CharField(max_length=50)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(null=True, blank=True)
     is_announcement = models.BooleanField(default=False)
 
 
 class Comment(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    post = models.ForeignKey(Post, on_delete=models.CASCADE)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comment')
     content = models.TextField()
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(null=True, blank=True)

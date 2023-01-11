@@ -1,5 +1,5 @@
 from .serializers import *
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, status
 from .models import *
 from authentication.serializers import UserDetailSerializer
 from .permissions import *
@@ -21,34 +21,36 @@ class AnnouncementListView(generics.ListAPIView):
     queryset = Post.objects.filter(is_announcement=True)
     serializer_class = PostSerializer
 
-    def list(self, request):
+    def list(self, request, *args, **kwargs):
         return Response(self.get_serializer(self.get_queryset(), many=True).data)
 
 
 class AnnouncementDetailView(generics.RetrieveAPIView):
-    # permission_classes = [IsQualified]
-    # queryset = Post.objects.filter(is_announcement=True)
+    permission_classes = [IsQualified | IsAdmin]
+    queryset = Post.objects.all()
     serializer_class = PostDetailSerializer
 
 
 class AnnouncementCreateView(generics.CreateAPIView):
-    # permission_classes = [IsProfessorOrReadOnly]
-    serializer_class = PostDetailSerializer
+    permission_classes = [IsProfessorOrReadOnly]
+    serializer_class = AnnouncementCreateSerializer
 
 
 class AnnouncementUpdateView(generics.UpdateAPIView):
-    # permission_classes = [IsProfessorOrReadOnly]
-    serializer_class = PostSerializer
+    permission_classes = [IsProfessorOrReadOnly]
+    queryset = Post.objects.all()
+    serializer_class = PostDetailSerializer
 
 
 class AnnouncementDeleteView(generics.DestroyAPIView):
-    # permission_classes = [IsProfessorOrReadOnly]
-    serializer_class = PostSerializer
+    permission_classes = [IsProfessorOrReadOnly]
+    queryset = Post.objects.all()
+    serializer_class = PostDetailSerializer
 
 
 class QuestionListView(generics.ListAPIView):
     pagination_class = PostListPagination
-    # permission_classes = [IsQualified]
+    permission_classes = [IsQualified | IsAdmin]
     queryset = Post.objects.filter(is_announcement=False)
     serializer_class = PostSerializer
 
@@ -57,36 +59,38 @@ class QuestionListView(generics.ListAPIView):
 
 
 class QuestionDetailView(generics.RetrieveAPIView):
-    # permission_classes = [IsQualified]
+    permission_classes = [IsQualified | IsAdmin]
     queryset = Post.objects.all()
     serializer_class = PostDetailSerializer
-    # lookup_field = ['title', 'created_by', 'created_at', 'content']
 
 
 class QuestionCreateView(generics.CreateAPIView):
-    # permission_classes = [IsQualified, DoesUserMatchRequest]
-
+    permission_classes = [IsQualified | IsAdmin]
     serializer_class = PostCreateSerializer
 
 
 class QuestionUpdateView(generics.UpdateAPIView):
-    # permission_classes = [IsQualified, DoesUserMatchRequest]
+    permission_classes = [IsQualified | IsAdmin]
     queryset = Post.objects.all()
     serializer_class = PostDetailSerializer
 
 
 class QuestionDeleteView(generics.DestroyAPIView):
-    # permission_classes = [IsQualified, DoesUserMatchRequest]
+    permission_classes = [IsQualified | IsAdmin]
     queryset = Post.objects.all()
     serializer_class = PostDetailSerializer
 
-    def delete(self, request, *args, **kwargs):
-        return Response(self.get_serializer(self.get_queryset()).data)
-
 
 class CommentCreateView(generics.CreateAPIView):
-    # permission_classes = [IsQualified, DoesUserMatchRequest]
+    permission_classes = [IsQualified | IsAdmin]
     serializer_class = CommentSerializer
+
+    def post(self, request, *args, **kwargs):
+        comment = Comment.objects.create(post_id=self.kwargs['pk'], content=request.data['content'], created_by=request.user)
+        serializer = CommentSerializer(comment)
+        headers = self.get_success_headers(serializer.data)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class ClassListView(generics.ListAPIView):
